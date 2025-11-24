@@ -1,0 +1,51 @@
+{
+  "name": "helm-chart-diff-viewer",
+  "version": "1.0.0",
+  "description": "Web application for comparing differences between two Helm chart versions",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "next": "^14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-syntax-highlighter": "^15.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@types/react-syntax-highlighter": "^15.5.11",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/jest": "^29.5.11",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.4"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "helm",
+    "kubernetes",
+    "diff",
+    "comparison",
+    "charts"
+  ],
+  "author": "",
+  "license": "MIT"
+}
