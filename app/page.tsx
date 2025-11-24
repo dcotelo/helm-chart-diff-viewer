@@ -3,14 +3,16 @@
 import { useState } from 'react';
 import { CompareForm } from '@/components/CompareForm';
 import { DiffDisplay } from '@/components/DiffDisplay';
-import { CompareResponse } from '@/lib/types';
+import { DemoExamples } from '@/components/DemoExamples';
+import { CompareResponse, CompareRequest } from '@/lib/types';
 
 export default function Home() {
   const [result, setResult] = useState<CompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<CompareRequest | undefined>(undefined);
 
-  const handleCompare = async (formData: any) => {
+  const handleCompare = async (formData: CompareRequest) => {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -68,7 +70,10 @@ export default function Home() {
       </div>
 
       <div style={{ padding: '2rem' }}>
-        <CompareForm onSubmit={handleCompare} loading={loading} />
+        <DemoExamples onSelectExample={(data) => {
+          setFormData(data);
+        }} />
+        <CompareForm onSubmit={handleCompare} loading={loading} initialData={formData} />
 
         {error && (
           <div style={{

@@ -183,6 +183,25 @@ npm run build
 npm start
 ```
 
+## 🔄 CI/CD
+
+This project includes GitHub Actions workflows for automated testing, building, and deployment:
+
+- **CI Pipeline** (`ci.yml`): Runs tests and builds on every push/PR
+- **Release Workflow** (`release.yml`): Creates releases when version tags are pushed
+- **Vercel Deployment** (`deploy-vercel.yml`): Automatically deploys to Vercel
+- **Docker Publishing** (`docker-publish.yml`): Builds and publishes Docker images
+
+See [`.github/workflows/README.md`](.github/workflows/README.md) for detailed setup instructions.
+
+### Status Badge
+
+Add this to your README to show CI status:
+
+```markdown
+![CI](https://github.com/your-username/helm-chart-diff-viewer/workflows/CI/badge.svg)
+```
+
 ## 🛠️ Development
 
 ### Project Structure
@@ -212,6 +231,9 @@ helm-chart-diff-viewer/
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint
 - `npm run type-check` - Run TypeScript type checking
+- `npm test` - Run tests
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:coverage` - Generate test coverage report
 
 ### Environment Variables
 
