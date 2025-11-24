@@ -54,10 +54,12 @@ describe('HelmService', () => {
     };
 
     it('should successfully compare two versions', async () => {
-      // Mock file system operations
+      // Mock file system operations - access is called for each version (2 times)
       mockMkdir.mockResolvedValue(undefined);
-      mockAccess.mockResolvedValue(undefined);
-      // Mock readdir for copyDirectory - called multiple times (once per directory level)
+      mockAccess
+        .mockResolvedValueOnce(undefined) // version1 access check
+        .mockResolvedValueOnce(undefined); // version2 access check
+      // Mock readdir for copyDirectory - called for each version's chart directory
       mockReaddir
         .mockResolvedValueOnce([{ name: 'Chart.yaml', isDirectory: () => false }] as any) // version1
         .mockResolvedValueOnce([{ name: 'Chart.yaml', isDirectory: () => false }] as any) // version2
@@ -135,8 +137,10 @@ describe('HelmService', () => {
 
     it('should use valuesContent when provided', async () => {
       mockMkdir.mockResolvedValue(undefined);
-      mockAccess.mockResolvedValue(undefined);
-      // Mock readdir for copyDirectory - called multiple times (once per directory level)
+      mockAccess
+        .mockResolvedValueOnce(undefined) // version1 access check
+        .mockResolvedValueOnce(undefined); // version2 access check
+      // Mock readdir for copyDirectory - called for each version's chart directory
       mockReaddir
         .mockResolvedValueOnce([{ name: 'Chart.yaml', isDirectory: () => false }] as any) // version1
         .mockResolvedValueOnce([{ name: 'Chart.yaml', isDirectory: () => false }] as any) // version2

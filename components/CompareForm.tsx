@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useEffect } from 'react';
+import { CompareRequest } from '@/lib/types';
 
 interface CompareFormProps {
-  onSubmit: (data: FormData) => void;
+  onSubmit: (data: CompareRequest) => void;
   loading: boolean;
+  initialData?: CompareRequest;
 }
 
-export function CompareForm({ onSubmit, loading }: CompareFormProps) {
-  const [formData, setFormData] = useState({
+export function CompareForm({ onSubmit, loading, initialData }: CompareFormProps) {
+  const [formData, setFormData] = useState<CompareRequest>(initialData || {
     repository: '',
     chartPath: 'charts/app',
     version1: '',
@@ -16,6 +18,12 @@ export function CompareForm({ onSubmit, loading }: CompareFormProps) {
     valuesFile: '',
     valuesContent: ''
   });
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    }
+  }, [initialData]);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
