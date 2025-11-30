@@ -39,7 +39,6 @@ RUN apk add --no-cache curl git tar && \
     mv linux-amd64/helm /usr/local/bin/helm && \
     rm -rf linux-amd64
 
-COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
