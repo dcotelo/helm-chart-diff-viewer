@@ -11,23 +11,23 @@ interface DemoExample {
 const demoExamples: DemoExample[] = [
   {
     name: 'Example 1: Basic Chart Comparison',
-    description: 'Compare two versions of a simple web application chart',
+    description: 'Compare the same branch (will show no differences, but demonstrates the tool)',
     data: {
       repository: 'https://github.com/helm/examples.git',
       chartPath: 'charts/nginx',
-      version1: 'v1.0.0',
-      version2: 'v1.1.0',
+      version1: 'main',
+      version2: 'main',
       valuesFile: 'values.yaml',
     }
   },
   {
     name: 'Example 2: With Custom Values',
-    description: 'Compare versions with custom values content',
+    description: 'Use custom values content for comparison',
     data: {
       repository: 'https://github.com/helm/examples.git',
       chartPath: 'charts/nginx',
-      version1: 'v1.0.0',
-      version2: 'v1.1.0',
+      version1: 'main',
+      version2: 'main',
       valuesContent: `replicaCount: 3
 image:
   repository: nginx
@@ -46,14 +46,14 @@ resources:
     }
   },
   {
-    name: 'Example 3: Production vs Development',
-    description: 'Compare production and development configurations',
+    name: 'Example 3: Using Your Own Repository',
+    description: 'Template - replace with your own repo URL, chart path, and versions',
     data: {
-      repository: 'https://github.com/helm/examples.git',
-      chartPath: 'charts/nginx',
+      repository: 'https://github.com/your-org/your-helm-charts.git',
+      chartPath: 'charts/myapp',
       version1: 'main',
       version2: 'develop',
-      valuesFile: 'values/prod.yaml',
+      valuesFile: 'values.yaml',
     }
   }
 ];

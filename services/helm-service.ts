@@ -77,8 +77,14 @@ export class HelmService {
   private async cloneRepository(repo: string, targetPath: string): Promise<void> {
     try {
       await fs.mkdir(targetPath, { recursive: true });
-      await execAsync(`git clone --depth 1 ${repo} ${targetPath}`, {
-        timeout: 60000
+      // Clone the repository (full clone to get all tags and branches)
+      // Use --no-single-branch to fetch all branches
+      await execAsync(`git clone --no-single-branch ${repo} ${targetPath}`, {
+        timeout: 120000
+      });
+      // Explicitly fetch all tags after cloning
+      await execAsync(`git -C ${targetPath} fetch --tags`, {
+        timeout: 30000
       });
     } catch (error) {
       throw new Error(`Failed to clone repository: ${error}`);
@@ -92,21 +98,38 @@ export class HelmService {
     targetPath: string
   ): Promise<void> {
     try {
-      // Checkout specific version
-      await execAsync(`git -C ${repoPath} fetch --tags --depth 1`, {
-        timeout: 30000
+      // Ensure we have all refs, including tags and branches
+      // Fetch all tags in case they weren't included in the clone
+      await execAsync(`git -C ${repoPath} fetch --all --tags --prune`, {
+        timeout: 60000
       });
       
-      // Try to checkout as tag first, then as branch/commit
+      // Escape the version to handle special characters and shell injection
+      const escapedVersion = version.replace(/[;&|`$(){}]/g, '\\$&');
+      
+      // Try to checkout - Git will automatically resolve tags, branches, or commits
       try {
-        await execAsync(`git -C ${repoPath} checkout ${version}`, {
-          timeout: 10000
+        await execAsync(`git -C ${repoPath} checkout ${escapedVersion} 2>&1`, {
+          timeout: 15000
         });
-      } catch {
-        // If tag doesn't work, try as commit SHA
-        await execAsync(`git -C ${repoPath} checkout ${version}`, {
-          timeout: 10000
-        });
+      } catch (checkoutError: any) {
+        // The version might not exist - provide a helpful error message
+        // First, let's check what refs are available
+        let availableRefs = '';
+        try {
+          const { stdout: tagsStdout } = await execAsync(`git -C ${repoPath} tag -l`, { timeout: 5000 });
+          const { stdout: branchesStdout } = await execAsync(`git -C ${repoPath} branch -r --format='%(refname:short)'`, { timeout: 5000 });
+          const tags = tagsStdout.trim().split('\n').filter(t => t).slice(0, 10).join(', ');
+          const branches = branchesStdout.trim().split('\n').filter(b => b).slice(0, 10).join(', ');
+          availableRefs = `\nAvailable tags (sample): ${tags || 'none'}\nAvailable branches (sample): ${branches || 'none'}`;
+        } catch {
+          // Ignore errors when checking refs
+        }
+        
+        throw new Error(
+          `Version/tag/branch "${version}" not found in the repository.` +
+          `${availableRefs}\nPlease verify that the version exists in the repository.`
+        );
       }
       
       // Copy chart directory
@@ -120,8 +143,8 @@ export class HelmService {
       } catch {
         throw new Error(`Chart path not found: ${chartPath} at version ${version}`);
       }
-    } catch (error) {
-      throw new Error(`Failed to extract version ${version}: ${error}`);
+    } catch (error: any) {
+      throw new Error(`Failed to extract version ${version}: ${error.message || error}`);
     }
   }
 
