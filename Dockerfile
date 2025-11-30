@@ -15,11 +15,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Install Helm
-RUN apk add --no-cache curl && \
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 -o get_helm.sh && \
-    chmod 700 get_helm.sh && \
-    ./get_helm.sh && \
-    rm get_helm.sh
+RUN apk add --no-cache curl tar && \
+    curl -fsSL https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz | tar -xz && \
+    mv linux-amd64/helm /usr/local/bin/helm && \
+    rm -rf linux-amd64
 
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
@@ -35,11 +34,10 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Install Helm and Git
-RUN apk add --no-cache curl git && \
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 -o get_helm.sh && \
-    chmod 700 get_helm.sh && \
-    ./get_helm.sh && \
-    rm get_helm.sh
+RUN apk add --no-cache curl git tar && \
+    curl -fsSL https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz | tar -xz && \
+    mv linux-amd64/helm /usr/local/bin/helm && \
+    rm -rf linux-amd64
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
