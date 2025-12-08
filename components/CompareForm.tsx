@@ -16,7 +16,8 @@ export function CompareForm({ onSubmit, loading, initialData }: CompareFormProps
     version1: '',
     version2: '',
     valuesFile: '',
-    valuesContent: ''
+    valuesContent: '',
+    ignoreLabels: false
   };
 
   const [formData, setFormData] = useState<CompareRequest>(() => initialData || defaultFormData);
@@ -29,7 +30,8 @@ export function CompareForm({ onSubmit, loading, initialData }: CompareFormProps
         version1: initialData.version1 || '',
         version2: initialData.version2 || '',
         valuesFile: initialData.valuesFile || '',
-        valuesContent: initialData.valuesContent || ''
+        valuesContent: initialData.valuesContent || '',
+        ignoreLabels: initialData.ignoreLabels || false
       });
     } else {
       setFormData({ ...defaultFormData });
@@ -204,6 +206,33 @@ export function CompareForm({ onSubmit, loading, initialData }: CompareFormProps
         />
         <small style={{ color: '#666', fontSize: '0.875rem' }}>
           YAML content for values file (takes precedence over values file path)
+        </small>
+      </div>
+
+      <div>
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          cursor: 'pointer',
+          userSelect: 'none'
+        }}>
+          <input
+            type="checkbox"
+            checked={formData.ignoreLabels || false}
+            onChange={(e) => setFormData({ ...formData, ignoreLabels: e.target.checked })}
+            style={{
+              width: '18px',
+              height: '18px',
+              cursor: 'pointer'
+            }}
+          />
+          <span style={{ fontWeight: '500', color: '#333' }}>
+            Ignore label changes
+          </span>
+        </label>
+        <small style={{ color: '#666', fontSize: '0.875rem', display: 'block', marginTop: '0.25rem', marginLeft: '1.75rem' }}>
+          Filter out changes to metadata.labels in the diff output
         </small>
       </div>
 

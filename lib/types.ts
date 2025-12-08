@@ -5,6 +5,7 @@ export interface CompareRequest {
   version2: string;
   valuesFile?: string;
   valuesContent?: string;
+  ignoreLabels?: boolean;
 }
 
 export interface CompareResponse {

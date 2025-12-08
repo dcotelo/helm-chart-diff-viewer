@@ -5,6 +5,7 @@ import { CompareResponse } from '@/lib/types';
 
 interface DiffDisplayProps {
   result: CompareResponse;
+  ignoreLabels?: boolean;
 }
 
 interface ResourceDiff {
@@ -304,11 +305,75 @@ function renderDiffLine(line: string, index: number): JSX.Element {
   );
 }
 
-export function DiffDisplay({ result }: DiffDisplayProps) {
+export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) {
   const hasDiff = result.diff && result.diff.trim().length > 0;
   
+  // Filter out label changes if ignoreLabels is true
+  let filteredDiff = result.diff || '';
+  if (ignoreLabels && filteredDiff) {
+    const lines = filteredDiff.split('\n');
+    const filteredLines: string[] = [];
+    let skipSection = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      // Check if this line indicates a label change (metadata.labels.*)
+      if (trimmed.includes('metadata.labels') || trimmed.match(/labels\.[^)]+/)) {
+        // Mark that we should skip this section
+        skipSection = true;
+        
+        // Skip this line and all lines until we hit a blank line or a new resource identifier
+        let j = i;
+        while (j < lines.length) {
+          const nextLine = lines[j];
+          const nextTrimmed = nextLine.trim();
+          
+          // Stop skipping if we hit a blank line followed by a non-label resource identifier
+          if (nextTrimmed === '' && j + 1 < lines.length) {
+            const afterBlank = lines[j + 1].trim();
+            // If next line is a resource identifier that's not a label, stop skipping
+            if (afterBlank.match(/\([^)]+\)/) && !afterBlank.includes('metadata.labels')) {
+              skipSection = false;
+              i = j; // Continue from here
+              break;
+            }
+          }
+          
+          // If we hit a new resource identifier that's not labels, stop skipping
+          if (nextTrimmed.match(/\([^)]+\)/) && !nextTrimmed.includes('metadata.labels') && j > i) {
+            skipSection = false;
+            i = j - 1; // Go back one line to process this resource
+            break;
+          }
+          
+          // Stop at blank line (end of current section)
+          if (nextTrimmed === '' && j > i) {
+            skipSection = false;
+            i = j - 1;
+            break;
+          }
+          
+          j++;
+        }
+        
+        // Skip to the end of the section
+        if (skipSection) {
+          i = j - 1;
+          skipSection = false;
+        }
+      } else {
+        // Not a label change, include the line
+        filteredLines.push(line);
+      }
+    }
+    
+    filteredDiff = filteredLines.join('\n');
+  }
+  
   // Parse and group by kind
-  const resources = hasDiff ? parseDiffByResources(result.diff || '') : [];
+  const resources = hasDiff ? parseDiffByResources(filteredDiff) : [];
   const groupedByKind = groupResourcesByKind(resources);
   const kinds = Object.keys(groupedByKind).sort();
   
