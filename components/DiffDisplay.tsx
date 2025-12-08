@@ -46,69 +46,146 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
   const resources: ResourceDiff[] = [];
   const lines = diff.split('\n');
   
-  // Split by --- separators (YAML document separators)
-  const sections: string[] = [];
+  // Try to detect dyff format first (paths with resource identifiers in parentheses)
+  // Format: "metadata.labels.helm.sh/chart  (v1/ServiceAccount/default/argocd-application-controller)"
+  const dyffPattern = /\(([^)]+)\)/; // Matches (kind/namespace/name) or (apiVersion/kind/namespace/name)
+  
+  let currentResource: ResourceDiff | null = null;
   let currentSection: string[] = [];
   
-  for (const line of lines) {
-    // Look for YAML document separator patterns
-    if (line.trim() === '---' || line.match(/^---\s*$/)) {
-      if (currentSection.length > 0) {
-        sections.push(currentSection.join('\n'));
-        currentSection = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    // Check if this line contains a resource identifier in parentheses (dyff format)
+    const resourceMatch = trimmed.match(dyffPattern);
+    if (resourceMatch) {
+      // Save previous resource if exists
+      if (currentResource && currentSection.length > 0) {
+        currentResource.diff = currentSection.join('\n');
+        currentResource.lines = [...currentSection];
+        resources.push(currentResource);
       }
+      
+      // Parse resource identifier: format is either:
+      // - kind/namespace/name
+      // - apiVersion/kind/namespace/name
+      const resourceParts = resourceMatch[1].split('/');
+      let kind: string;
+      let name: string;
+      let namespace: string | undefined;
+      
+      if (resourceParts.length === 3) {
+        // kind/namespace/name
+        kind = resourceParts[0];
+        namespace = resourceParts[1];
+        name = resourceParts[2];
+      } else if (resourceParts.length === 4) {
+        // apiVersion/kind/namespace/name
+        kind = resourceParts[1];
+        namespace = resourceParts[2];
+        name = resourceParts[3];
+      } else {
+        // Fallback: use first part as kind, last as name
+        kind = resourceParts[0] || 'Unknown';
+        name = resourceParts[resourceParts.length - 1] || 'unknown';
+        namespace = resourceParts.length > 2 ? resourceParts[1] : undefined;
+      }
+      
+      // Extract the path part (everything before the parentheses)
+      const pathPart = trimmed.split('(')[0].trim();
+      
+      // Start new resource
+      currentResource = {
+        kind: kind,
+        name: name,
+        namespace: namespace === 'default' || namespace === '' ? undefined : namespace,
+        diff: '',
+        lines: []
+      };
+      
+      // Include the header line in the section
+      currentSection = [line];
+    } else if (currentResource) {
+      // We're in a resource section, collect lines until we hit another resource or end
+      // Check if next non-empty line starts a new resource
+      if (trimmed === '' && i < lines.length - 1) {
+        // Look ahead to see if next non-empty line is a new resource
+        let foundNextResource = false;
+        for (let j = i + 1; j < lines.length; j++) {
+          const nextLine = lines[j].trim();
+          if (nextLine === '') continue;
+          if (nextLine.match(dyffPattern)) {
+            foundNextResource = true;
+          }
+          break;
+        }
+        
+        if (foundNextResource) {
+          // Save current resource and start new one
+          currentResource.diff = currentSection.join('\n');
+          currentResource.lines = [...currentSection];
+          resources.push(currentResource);
+          currentResource = null;
+          currentSection = [];
+          continue;
+        }
+      }
+      
       currentSection.push(line);
     } else {
-      currentSection.push(line);
-    }
-  }
-  
-  // Add last section
-  if (currentSection.length > 0) {
-    sections.push(currentSection.join('\n'));
-  }
-  
-  // If no --- separators found, try splitting by blank lines + kind pattern
-  if (sections.length === 1 && diff.includes('kind:')) {
-    sections.length = 0;
-    currentSection = [];
-    let inResource = false;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      
-      // New resource detected by kind: at start of line or after minimal indentation
-      if (trimmed.toLowerCase().startsWith('kind:') || 
-          (trimmed.match(/^[+-]?\s{0,4}kind:/i) && !inResource)) {
-        if (inResource && currentSection.length > 0) {
-          sections.push(currentSection.join('\n'));
+      // Not in a resource section and no resource detected - could be header or other content
+      // Try to detect if this is traditional diff format
+      if (trimmed.startsWith('+++') || trimmed.startsWith('---')) {
+        // Traditional diff header, treat as single resource
+        if (!currentResource) {
+          currentResource = {
+            kind: 'Unknown',
+            name: 'all',
+            namespace: undefined,
+            diff: '',
+            lines: []
+          };
         }
-        currentSection = [];
-        inResource = true;
-      }
-      
-      currentSection.push(line);
-      
-      // Check if we've moved to a new resource (blank line + kind: or ---)
-      if (trimmed === '' && i < lines.length - 1) {
-        const nextLine = lines[i + 1].trim();
-        if (nextLine.toLowerCase().startsWith('kind:') || nextLine === '---') {
-          if (currentSection.length > 0) {
-            sections.push(currentSection.join('\n'));
-            currentSection = [];
-            inResource = false;
-          }
-        }
+        currentSection.push(line);
       }
     }
-    
-    if (currentSection.length > 0) {
-      sections.push(currentSection.join('\n'));
+  }
+  
+  // Save last resource
+  if (currentResource && currentSection.length > 0) {
+    currentResource.diff = currentSection.join('\n');
+    currentResource.lines = [...currentSection];
+    resources.push(currentResource);
+  }
+  
+  // If we found resources using dyff format, return them
+  if (resources.length > 0) {
+    return resources;
+  }
+  
+  // Fallback: Try traditional YAML diff format
+  // Split by --- separators (YAML document separators)
+  const sections: string[] = [];
+  let currentSection2: string[] = [];
+  
+  for (const line of lines) {
+    if (line.trim() === '---' || line.match(/^---\s*$/)) {
+      if (currentSection2.length > 0) {
+        sections.push(currentSection2.join('\n'));
+        currentSection2 = [];
+      }
+      currentSection2.push(line);
+    } else {
+      currentSection2.push(line);
     }
   }
   
-  // Parse each section
+  if (currentSection2.length > 0) {
+    sections.push(currentSection2.join('\n'));
+  }
+  
+  // Parse YAML sections
   for (const section of sections) {
     if (!section.trim()) continue;
     
@@ -118,11 +195,9 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
     
     const sectionLines = section.split('\n');
     
-    // Extract kind, name, namespace
     for (const line of sectionLines) {
       const trimmed = line.trim();
       
-      // Extract kind (handle diff markers like +kind: or -kind: or just kind:)
       if (!kind && trimmed.match(/^[+-]?\s*kind:\s*(.+)$/i)) {
         const match = trimmed.match(/kind:\s*(.+)$/i);
         if (match) {
@@ -130,7 +205,6 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
         }
       }
       
-      // Extract name (only if we found kind first, and name appears before other top-level keys)
       if (kind && !name && trimmed.match(/^[+-]?\s*name:\s*(.+)$/i)) {
         const match = trimmed.match(/name:\s*(.+)$/i);
         if (match) {
@@ -138,7 +212,6 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
         }
       }
       
-      // Extract namespace
       if (!namespace && trimmed.match(/^[+-]?\s*namespace:\s*(.+)$/i)) {
         const match = trimmed.match(/namespace:\s*(.+)$/i);
         if (match) {
@@ -147,7 +220,6 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
       }
     }
     
-    // If we found at least a kind, create a resource entry
     if (kind) {
       resources.push({
         kind: kind,
