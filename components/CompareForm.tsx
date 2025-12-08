@@ -228,11 +228,11 @@ export function CompareForm({ onSubmit, loading, initialData }: CompareFormProps
             }}
           />
           <span style={{ fontWeight: '500', color: '#333' }}>
-            Ignore label changes
+            Ignore metadata/tag updates
           </span>
         </label>
         <small style={{ color: '#666', fontSize: '0.875rem', display: 'block', marginTop: '0.25rem', marginLeft: '1.75rem' }}>
-          Filter out changes to metadata.labels in the diff output
+          Hide changes to labels and annotations (metadata updates that don't affect resource behavior)
         </small>
       </div>
 

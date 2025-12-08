@@ -9,6 +9,8 @@ interface DiffDisplayProps {
 }
 
 interface ResourceDiff {
+  category: string;
+  path: string;
   kind: string;
   name: string;
   namespace?: string;
@@ -16,31 +18,77 @@ interface ResourceDiff {
   lines: string[];
 }
 
-// Color palette for different Kubernetes resource kinds
-const kindColors: Record<string, { bg: string; border: string; text: string }> = {
-  'Deployment': { bg: '#e3f2fd', border: '#2196f3', text: '#1565c0' },
-  'Service': { bg: '#f3e5f5', border: '#9c27b0', text: '#6a1b9a' },
-  'ConfigMap': { bg: '#fff3e0', border: '#ff9800', text: '#e65100' },
-  'Secret': { bg: '#ffebee', border: '#f44336', text: '#c62828' },
-  'Ingress': { bg: '#e8f5e9', border: '#4caf50', text: '#2e7d32' },
-  'StatefulSet': { bg: '#e0f2f1', border: '#009688', text: '#00695c' },
-  'DaemonSet': { bg: '#fff9c4', border: '#fbc02d', text: '#f57f17' },
-  'Job': { bg: '#e1bee7', border: '#9c27b0', text: '#6a1b9a' },
-  'CronJob': { bg: '#f8bbd0', border: '#e91e63', text: '#ad1457' },
-  'PersistentVolumeClaim': { bg: '#b2ebf2', border: '#00bcd4', text: '#00838f' },
-  'ServiceAccount': { bg: '#f1f8e9', border: '#8bc34a', text: '#558b2f' },
-  'Role': { bg: '#e8eaf6', border: '#3f51b5', text: '#283593' },
-  'RoleBinding': { bg: '#e8eaf6', border: '#3f51b5', text: '#283593' },
-  'ClusterRole': { bg: '#ede7f6', border: '#673ab7', text: '#4527a0' },
-  'ClusterRoleBinding': { bg: '#ede7f6', border: '#673ab7', text: '#4527a0' },
-};
-
-function getKindColor(kind: string): { bg: string; border: string; text: string } {
-  return kindColors[kind] || { 
-    bg: '#f5f5f5', 
-    border: '#9e9e9e', 
-    text: '#424242' 
-  };
+// Categorize changes based on the path
+function categorizeChange(path: string, kind: string): string {
+  const lowerPath = path.toLowerCase();
+  
+  // Metadata and tags (labels, annotations)
+  if (lowerPath.includes('metadata.labels') || lowerPath.includes('metadata.annotations')) {
+    return 'Metadata & Tags';
+  }
+  
+  // Status changes (usually not meaningful for comparison)
+  if (lowerPath.includes('.status.')) {
+    return 'Status';
+  }
+  
+  // Spec changes - actual configuration
+  if (lowerPath.includes('.spec.')) {
+    // Further categorize spec changes by type
+    if (lowerPath.includes('.spec.containers') || lowerPath.includes('.spec.image') || lowerPath.includes('.spec.template')) {
+      return 'Container & Image';
+    }
+    if (lowerPath.includes('.spec.replicas') || lowerPath.includes('.spec.scale')) {
+      return 'Scaling';
+    }
+    if (lowerPath.includes('.spec.service') || lowerPath.includes('.spec.port') || lowerPath.includes('.spec.type')) {
+      return 'Service Configuration';
+    }
+    if (lowerPath.includes('.spec.selector') || lowerPath.includes('.spec.matchlabels')) {
+      return 'Selectors & Matching';
+    }
+    if (lowerPath.includes('.spec.resources') || lowerPath.includes('.spec.limits') || lowerPath.includes('.spec.requests')) {
+      return 'Resources';
+    }
+    if (lowerPath.includes('.spec.env') || lowerPath.includes('.spec.configmap') || lowerPath.includes('.spec.secret')) {
+      return 'Environment & Config';
+    }
+    if (lowerPath.includes('.spec.volume') || lowerPath.includes('.spec.persistentvolume')) {
+      return 'Storage & Volumes';
+    }
+    if (lowerPath.includes('.spec.ingress') || lowerPath.includes('.spec.host') || lowerPath.includes('.spec.path')) {
+      return 'Networking';
+    }
+    return 'Spec Changes';
+  }
+  
+  // ConfigMap and Secret data
+  if (lowerPath.includes('.data.') || lowerPath.includes('configmap') || lowerPath.includes('secret')) {
+    return 'Configuration Data';
+  }
+  
+  // Resource-specific groupings
+  if (kind === 'Service') {
+    return 'Services';
+  }
+  if (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet') {
+    return 'Workloads';
+  }
+  if (kind === 'ConfigMap' || kind === 'Secret') {
+    return 'Configuration';
+  }
+  if (kind === 'Ingress') {
+    return 'Ingress';
+  }
+  if (kind === 'ServiceAccount' || kind === 'Role' || kind === 'RoleBinding' || kind === 'ClusterRole' || kind === 'ClusterRoleBinding') {
+    return 'RBAC';
+  }
+  if (kind === 'PersistentVolumeClaim' || kind === 'PersistentVolume') {
+    return 'Storage';
+  }
+  
+  // Default: group by kind
+  return kind || 'Other';
 }
 
 function parseDiffByResources(diff: string): ResourceDiff[] {
@@ -96,8 +144,13 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
       // Extract the path part (everything before the parentheses)
       const pathPart = trimmed.split('(')[0].trim();
       
+      // Categorize the change
+      const category = categorizeChange(pathPart, kind);
+      
       // Start new resource
       currentResource = {
+        category: category,
+        path: pathPart,
         kind: kind,
         name: name,
         namespace: namespace === 'default' || namespace === '' ? undefined : namespace,
@@ -141,6 +194,8 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
         // Traditional diff header, treat as single resource
         if (!currentResource) {
           currentResource = {
+            category: 'Other',
+            path: '',
             kind: 'Unknown',
             name: 'all',
             namespace: undefined,
@@ -166,7 +221,6 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
   }
   
   // Fallback: Try traditional YAML diff format
-  // Split by --- separators (YAML document separators)
   const sections: string[] = [];
   let currentSection2: string[] = [];
   
@@ -223,6 +277,8 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
     
     if (kind) {
       resources.push({
+        category: categorizeChange('', kind),
+        path: '',
         kind: kind,
         name: name || 'unknown',
         namespace: namespace || undefined,
@@ -235,6 +291,8 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
   // If we couldn't parse into resources, return the whole diff as one entry
   if (resources.length === 0) {
     return [{
+      category: 'All Changes',
+      path: '',
       kind: 'All Resources',
       name: 'all',
       diff: diff,
@@ -245,17 +303,56 @@ function parseDiffByResources(diff: string): ResourceDiff[] {
   return resources;
 }
 
-function groupResourcesByKind(resources: ResourceDiff[]): Record<string, ResourceDiff[]> {
+function groupResourcesByCategory(resources: ResourceDiff[]): Record<string, ResourceDiff[]> {
   const grouped: Record<string, ResourceDiff[]> = {};
   
+  // Define category order (most important first)
+  const categoryOrder = [
+    'Container & Image',
+    'Scaling',
+    'Resources',
+    'Service Configuration',
+    'Networking',
+    'Environment & Config',
+    'Storage & Volumes',
+    'Selectors & Matching',
+    'Workloads',
+    'Services',
+    'Ingress',
+    'Configuration',
+    'Configuration Data',
+    'RBAC',
+    'Storage',
+    'Spec Changes',
+    'Metadata & Tags',
+    'Status',
+    'Other'
+  ];
+  
   for (const resource of resources) {
-    if (!grouped[resource.kind]) {
-      grouped[resource.kind] = [];
+    if (!grouped[resource.category]) {
+      grouped[resource.category] = [];
     }
-    grouped[resource.kind].push(resource);
+    grouped[resource.category].push(resource);
   }
   
-  return grouped;
+  // Sort categories by importance, then alphabetically for unmapped ones
+  const sortedCategories = Object.keys(grouped).sort((a, b) => {
+    const aIndex = categoryOrder.indexOf(a);
+    const bIndex = categoryOrder.indexOf(b);
+    
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.localeCompare(b);
+  });
+  
+  const sorted: Record<string, ResourceDiff[]> = {};
+  for (const cat of sortedCategories) {
+    sorted[cat] = grouped[cat];
+  }
+  
+  return sorted;
 }
 
 // Render diff lines without colors
@@ -305,6 +402,37 @@ function renderDiffLine(line: string, index: number): JSX.Element {
   );
 }
 
+// Color palette for different change categories
+const categoryColors: Record<string, { bg: string; border: string; text: string }> = {
+  'Container & Image': { bg: '#e3f2fd', border: '#2196f3', text: '#1565c0' },
+  'Scaling': { bg: '#fff3e0', border: '#ff9800', text: '#e65100' },
+  'Resources': { bg: '#f3e5f5', border: '#9c27b0', text: '#6a1b9a' },
+  'Service Configuration': { bg: '#e8f5e9', border: '#4caf50', text: '#2e7d32' },
+  'Networking': { bg: '#e0f2f1', border: '#009688', text: '#00695c' },
+  'Environment & Config': { bg: '#fff9c4', border: '#fbc02d', text: '#f57f17' },
+  'Storage & Volumes': { bg: '#b2ebf2', border: '#00bcd4', text: '#00838f' },
+  'Selectors & Matching': { bg: '#f1f8e9', border: '#8bc34a', text: '#558b2f' },
+  'Workloads': { bg: '#e8eaf6', border: '#3f51b5', text: '#283593' },
+  'Services': { bg: '#f3e5f5', border: '#9c27b0', text: '#6a1b9a' },
+  'Ingress': { bg: '#e8f5e9', border: '#4caf50', text: '#2e7d32' },
+  'Configuration': { bg: '#fff3e0', border: '#ff9800', text: '#e65100' },
+  'Configuration Data': { bg: '#fff9c4', border: '#fbc02d', text: '#f57f17' },
+  'RBAC': { bg: '#ede7f6', border: '#673ab7', text: '#4527a0' },
+  'Storage': { bg: '#b2ebf2', border: '#00bcd4', text: '#00838f' },
+  'Spec Changes': { bg: '#e1bee7', border: '#9c27b0', text: '#6a1b9a' },
+  'Metadata & Tags': { bg: '#f5f5f5', border: '#9e9e9e', text: '#424242' },
+  'Status': { bg: '#eceff1', border: '#607d8b', text: '#37474f' },
+  'Other': { bg: '#fafafa', border: '#bdbdbd', text: '#616161' }
+};
+
+function getCategoryColor(category: string): { bg: string; border: string; text: string } {
+  return categoryColors[category] || { 
+    bg: '#f5f5f5', 
+    border: '#9e9e9e', 
+    text: '#424242' 
+  };
+}
+
 export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) {
   const hasDiff = result.diff && result.diff.trim().length > 0;
   
@@ -321,54 +449,45 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
       // Check if this line indicates a label change
       // Format: "metadata.labels.xxx  (resource)" or contains "metadata.labels"
       const isLabelChange = trimmed.includes('metadata.labels') || 
-                            trimmed.match(/^metadata\.labels\./);
+                            trimmed.match(/^metadata\.labels\./) ||
+                            trimmed.includes('metadata.annotations');
       
       if (isLabelChange) {
         // Skip this entire section until we hit the next resource or blank line sequence
-        // Find where this section ends (blank line or new resource)
         let skipUntil = i + 1;
         let foundEnd = false;
         
-        // Skip until we find:
-        // 1. Two consecutive blank lines (end of section)
-        // 2. A new resource identifier that's not a label change
         while (skipUntil < lines.length && !foundEnd) {
           const nextLine = lines[skipUntil];
           const nextTrimmed = nextLine.trim();
           
-          // Check if next line starts a new non-label resource
-          if (nextTrimmed.match(/\([^)]+\)/) && !nextTrimmed.includes('metadata.labels')) {
+          if (nextTrimmed.match(/\([^)]+\)/) && !nextTrimmed.includes('metadata.labels') && !nextTrimmed.includes('metadata.annotations')) {
             foundEnd = true;
-            i = skipUntil - 1; // Will increment, so we process the new resource
+            i = skipUntil - 1;
             break;
           }
           
-          // If we find a blank line, check if next non-blank line is a new resource
           if (nextTrimmed === '' && skipUntil + 1 < lines.length) {
-            // Look ahead for next non-blank line
             for (let k = skipUntil + 1; k < lines.length; k++) {
               const aheadTrimmed = lines[k].trim();
               if (aheadTrimmed === '') continue;
               
-              // If it's a new resource (not labels), we've reached the end
               if (aheadTrimmed.match(/\([^)]+\)/)) {
-                if (!aheadTrimmed.includes('metadata.labels')) {
+                if (!aheadTrimmed.includes('metadata.labels') && !aheadTrimmed.includes('metadata.annotations')) {
                   foundEnd = true;
-                  i = k - 1; // Process the new resource next
+                  i = k - 1;
                   break;
                 }
               }
-              break; // Not a resource identifier, just continue
+              break;
             }
           }
           
           skipUntil++;
         }
         
-        // Skip the entire label section
-        i = skipUntil - 1; // Will increment in loop
+        i = skipUntil - 1;
       } else {
-        // Not a label change, include the line
         filteredLines.push(line);
       }
     }
@@ -376,46 +495,46 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
     filteredDiff = filteredLines.join('\n');
   }
   
-  // Parse and group by kind
+  // Parse and group by category
   const resources = hasDiff ? parseDiffByResources(filteredDiff) : [];
-  const groupedByKind = groupResourcesByKind(resources);
-  const kinds = Object.keys(groupedByKind).sort();
+  const groupedByCategory = groupResourcesByCategory(resources);
+  const categories = Object.keys(groupedByCategory);
   
-  // Initialize with all kinds expanded
-  const [expandedKinds, setExpandedKinds] = useState<Set<string>>(new Set());
+  // Initialize with all categories expanded
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   
-  // Expand all kinds when result changes
+  // Expand all categories when result changes
   useEffect(() => {
-    if (kinds.length > 0) {
-      setExpandedKinds(new Set(kinds));
+    if (categories.length > 0) {
+      setExpandedCategories(new Set(categories));
     } else {
-      setExpandedKinds(new Set());
+      setExpandedCategories(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result.version1, result.version2]); // Expand when comparison changes
+  }, [result.version1, result.version2]);
   
-  const toggleKind = (kind: string) => {
-    setExpandedKinds(prev => {
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(kind)) {
-        newSet.delete(kind);
+      if (newSet.has(category)) {
+        newSet.delete(category);
       } else {
-        newSet.add(kind);
+        newSet.add(category);
       }
       return newSet;
     });
   };
   
   const expandAll = () => {
-    setExpandedKinds(new Set(kinds));
+    setExpandedCategories(new Set(categories));
   };
   
   const collapseAll = () => {
-    setExpandedKinds(new Set());
+    setExpandedCategories(new Set());
   };
   
-  const allExpanded = expandedKinds.size === kinds.length && kinds.length > 0;
-  const allCollapsed = expandedKinds.size === 0 && kinds.length > 0;
+  const allExpanded = expandedCategories.size === categories.length && categories.length > 0;
+  const allCollapsed = expandedCategories.size === 0 && categories.length > 0;
 
   return (
     <div style={{
@@ -443,7 +562,7 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
           }}>
             Comparison Results
           </h2>
-          {kinds.length > 0 && (
+          {categories.length > 0 && (
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
                 onClick={expandAll}
@@ -501,13 +620,13 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
               borderRadius: '4px'
             }}>{result.version2}</code>
           </span>
-          {kinds.length > 0 && (
+          {categories.length > 0 && (
             <span>
-              <strong>Resource Types:</strong> <code style={{
+              <strong>Categories:</strong> <code style={{
                 background: '#e0e0e0',
                 padding: '0.2rem 0.5rem',
                 borderRadius: '4px'
-              }}>{kinds.length} kind{kinds.length !== 1 ? 's' : ''}</code>
+              }}>{categories.length} categorie{categories.length !== 1 ? 's' : ''}</code>
             </span>
           )}
         </div>
@@ -516,22 +635,21 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
       <div style={{ background: '#1e1e1e' }}>
         {hasDiff ? (
           <div>
-            {kinds.length > 0 ? (
-              // Grouped by kind view
+            {categories.length > 0 ? (
               <div>
-                {kinds.map((kind) => {
-                  const kindResources = groupedByKind[kind];
-                  const color = getKindColor(kind);
-                  const isExpanded = expandedKinds.has(kind);
+                {categories.map((category) => {
+                  const categoryResources = groupedByCategory[category];
+                  const color = getCategoryColor(category);
+                  const isExpanded = expandedCategories.has(category);
                   
                   return (
-                    <div key={kind} style={{
+                    <div key={category} style={{
                       borderBottom: '2px solid #444',
                       marginBottom: '1rem'
                     }}>
-                      {/* Kind header - collapsible */}
+                      {/* Category header - collapsible */}
                       <div 
-                        onClick={() => toggleKind(kind)}
+                        onClick={() => toggleCategory(category)}
                         style={{
                           padding: '0.75rem 1rem',
                           background: color.bg,
@@ -562,22 +680,22 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                           ▶
                         </span>
                         <span style={{ fontSize: '1.1rem' }}>📦</span>
-                        <span>{kind}</span>
+                        <span>{category}</span>
                         <span style={{ 
                           fontSize: '0.85rem', 
                           opacity: 0.8,
                           marginLeft: 'auto'
                         }}>
-                          ({kindResources.length} resource{kindResources.length !== 1 ? 's' : ''})
+                          ({categoryResources.length} change{categoryResources.length !== 1 ? 's' : ''})
                         </span>
                       </div>
                       
-                      {/* Resources of this kind */}
+                      {/* Resources in this category */}
                       {isExpanded && (
                         <div>
-                          {kindResources.map((resource, idx) => (
+                          {categoryResources.map((resource, idx) => (
                             <div key={idx} style={{
-                              borderBottom: idx < kindResources.length - 1 ? '1px solid #333' : 'none'
+                              borderBottom: idx < categoryResources.length - 1 ? '1px solid #333' : 'none'
                             }}>
                               {/* Resource header */}
                               <div style={{
@@ -587,12 +705,19 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                                 fontSize: '0.85rem',
                                 borderBottom: '1px solid #444'
                               }}>
-                                <strong>Name:</strong> {resource.name}
-                                {resource.namespace && (
-                                  <span style={{ marginLeft: '1rem', opacity: 0.8 }}>
-                                    <strong>Namespace:</strong> {resource.namespace}
-                                  </span>
-                                )}
+                                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                  <span><strong>Resource:</strong> {resource.kind}/{resource.name}</span>
+                                  {resource.namespace && (
+                                    <span style={{ opacity: 0.8 }}>
+                                      <strong>Namespace:</strong> {resource.namespace}
+                                    </span>
+                                  )}
+                                  {resource.path && (
+                                    <span style={{ opacity: 0.8 }}>
+                                      <strong>Path:</strong> <code style={{ fontSize: '0.8rem' }}>{resource.path}</code>
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               {/* Resource diff content */}
                               <div style={{
@@ -612,7 +737,6 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                 })}
               </div>
             ) : (
-              // Fallback to original view if parsing failed
               <div>
                 <div style={{
                   padding: '0.75rem 1rem',
