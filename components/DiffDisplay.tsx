@@ -480,34 +480,71 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
                       {/* Resources of this kind - collapsible */}
                       {isExpanded && (
                         <div>
-                          {kindResources.map((resource, idx) => (
-                            <div key={idx} style={{
-                              borderBottom: idx < kindResources.length - 1 ? '1px solid #333' : 'none'
-                            }}>
-                              <div style={{
-                                padding: '0.5rem 1rem',
-                                background: '#2d2d2d',
-                                color: '#fff',
-                                fontSize: '0.85rem',
-                                borderBottom: '1px solid #444'
+                          {kindResources.map((resource, idx) => {
+                            const resourceKey = getResourceKey(resource);
+                            const isResourceExpanded = expandedResources.has(resourceKey);
+                            
+                            return (
+                              <div key={idx} style={{
+                                borderBottom: idx < kindResources.length - 1 ? '1px solid #333' : 'none'
                               }}>
-                                <strong>Name:</strong> {resource.name}
-                                {resource.namespace && (
-                                  <span style={{ marginLeft: '1rem', opacity: 0.8 }}>
-                                    <strong>Namespace:</strong> {resource.namespace}
+                                {/* Resource header - collapsible */}
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Don't toggle the kind when clicking resource
+                                    toggleResource(resource);
+                                  }}
+                                  style={{
+                                    padding: '0.5rem 1rem',
+                                    background: '#2d2d2d',
+                                    color: '#fff',
+                                    fontSize: '0.85rem',
+                                    borderBottom: '1px solid #444',
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    transition: 'background 0.2s'
+                                  }}
+                                  onMouseOver={(e) => {
+                                    e.currentTarget.style.background = '#353535';
+                                  }}
+                                  onMouseOut={(e) => {
+                                    e.currentTarget.style.background = '#2d2d2d';
+                                  }}
+                                >
+                                  <span style={{ 
+                                    fontSize: '0.75rem',
+                                    transition: 'transform 0.2s',
+                                    transform: isResourceExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                    display: 'inline-block'
+                                  }}>
+                                    ▶
                                   </span>
+                                  <span>
+                                    <strong>Name:</strong> {resource.name}
+                                    {resource.namespace && (
+                                      <span style={{ marginLeft: '1rem', opacity: 0.8 }}>
+                                        <strong>Namespace:</strong> {resource.namespace}
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                {/* Resource diff content - collapsible */}
+                                {isResourceExpanded && (
+                                  <div style={{
+                                    background: '#1e1e1e',
+                                    overflowX: 'auto'
+                                  }}>
+                                    {resource.lines.map((line, lineIdx) => 
+                                      renderDiffLine(line, lineIdx)
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                              <div style={{
-                                background: '#1e1e1e',
-                                overflowX: 'auto'
-                              }}>
-                                {resource.lines.map((line, lineIdx) => 
-                                  renderDiffLine(line, lineIdx)
-                                )}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
