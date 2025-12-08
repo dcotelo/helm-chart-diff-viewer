@@ -61,13 +61,48 @@ repoServer:
   },
   {
     name: 'Example 3: Compare with Values File',
-    description: 'Compare ArgoCD chart configurations using a values file from the repository',
+    description: 'Compare ArgoCD chart configurations with custom values',
     data: {
       repository: 'https://github.com/argoproj/argo-helm.git',
       chartPath: 'charts/argo-cd',
-      version1: 'main',
-      version2: 'main',
-      valuesFile: 'charts/argo-cd/values.yaml',
+      version1: 'argo-cd-9.1.5',
+      version2: 'argo-cd-9.1.6',
+      valuesContent: `controller:
+  replicas: 3
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 256Mi
+server:
+  replicas: 2
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  service:
+    type: LoadBalancer
+repoServer:
+  replicas: 3
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+redis-ha:
+  enabled: true
+  redis:
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m`
     }
   }
 ];
