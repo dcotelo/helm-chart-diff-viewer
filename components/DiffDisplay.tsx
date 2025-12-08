@@ -255,13 +255,23 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
   
   // Initialize with all kinds expanded
   const [expandedKinds, setExpandedKinds] = useState<Set<string>>(new Set());
+  // Track expanded individual resources: key format is "kind:name:namespace"
+  const [expandedResources, setExpandedResources] = useState<Set<string>>(new Set());
   
-  // Expand all kinds when result changes
+  // Expand all kinds and resources when result changes
   useEffect(() => {
     if (kinds.length > 0) {
       setExpandedKinds(new Set(kinds));
+      // Expand all resources by default
+      const allResourceKeys = new Set<string>();
+      resources.forEach(resource => {
+        const key = `${resource.kind}:${resource.name}:${resource.namespace || 'default'}`;
+        allResourceKeys.add(key);
+      });
+      setExpandedResources(allResourceKeys);
     } else {
       setExpandedKinds(new Set());
+      setExpandedResources(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result.version1, result.version2]); // Expand when comparison changes
@@ -278,12 +288,35 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
     });
   };
   
+  const getResourceKey = (resource: ResourceDiff): string => {
+    return `${resource.kind}:${resource.name}:${resource.namespace || 'default'}`;
+  };
+  
+  const toggleResource = (resource: ResourceDiff) => {
+    const key = getResourceKey(resource);
+    setExpandedResources(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+  
   const expandAll = () => {
     setExpandedKinds(new Set(kinds));
+    const allResourceKeys = new Set<string>();
+    resources.forEach(resource => {
+      allResourceKeys.add(getResourceKey(resource));
+    });
+    setExpandedResources(allResourceKeys);
   };
   
   const collapseAll = () => {
     setExpandedKinds(new Set());
+    setExpandedResources(new Set());
   };
   
   const allExpanded = expandedKinds.size === kinds.length && kinds.length > 0;
