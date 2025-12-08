@@ -637,6 +637,138 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
           <div>
             {categories.length > 0 ? (
               <div>
+                {/* Executive Summary */}
+                <div style={{
+                  padding: '1.5rem',
+                  background: '#2d2d2d',
+                  borderBottom: '2px solid #444',
+                  marginBottom: '1rem'
+                }}>
+                  <h3 style={{
+                    fontSize: '1.25rem',
+                    fontWeight: '600',
+                    color: '#fff',
+                    marginBottom: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}>
+                    <span>📊</span> Executive Summary
+                  </h3>
+                  
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '1rem',
+                    marginBottom: '1rem'
+                  }}>
+                    <div style={{
+                      padding: '1rem',
+                      background: '#1e1e1e',
+                      borderRadius: '6px',
+                      border: '1px solid #444'
+                    }}>
+                      <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.25rem' }}>
+                        Total Changes
+                      </div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#fff' }}>
+                        {resources.length}
+                      </div>
+                    </div>
+                    
+                    <div style={{
+                      padding: '1rem',
+                      background: '#1e1e1e',
+                      borderRadius: '6px',
+                      border: '1px solid #444'
+                    }}>
+                      <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.25rem' }}>
+                        Categories
+                      </div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#fff' }}>
+                        {categories.length}
+                      </div>
+                    </div>
+                    
+                    <div style={{
+                      padding: '1rem',
+                      background: '#1e1e1e',
+                      borderRadius: '6px',
+                      border: '1px solid #444'
+                    }}>
+                      <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: '0.25rem' }}>
+                        Resources Affected
+                      </div>
+                      <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#fff' }}>
+                        {new Set(resources.map(r => `${r.kind}/${r.name}`)).size}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Category Breakdown */}
+                  <div style={{ marginTop: '1rem' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '500', color: '#ccc', marginBottom: '0.75rem' }}>
+                      Changes by Category:
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem'
+                    }}>
+                      {categories.map((category) => {
+                        const count = groupedByCategory[category].length;
+                        const color = getCategoryColor(category);
+                        const isImportant = !category.includes('Metadata') && !category.includes('Status') && !category.includes('Tags');
+                        
+                        return (
+                          <div
+                            key={category}
+                            style={{
+                              padding: '0.5rem 0.75rem',
+                              background: isImportant ? color.bg : '#1e1e1e',
+                              border: `1px solid ${color.border}`,
+                              borderRadius: '4px',
+                              fontSize: '0.85rem',
+                              color: isImportant ? color.text : '#ccc',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem'
+                            }}
+                          >
+                            <span style={{ fontWeight: '600' }}>{category}:</span>
+                            <span style={{ 
+                              background: isImportant ? color.border : '#444',
+                              color: '#fff',
+                              padding: '0.1rem 0.4rem',
+                              borderRadius: '3px',
+                              fontSize: '0.75rem',
+                              fontWeight: '600'
+                            }}>
+                              {count}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* Key Changes Highlight */}
+                  {resources.some(r => !r.category.includes('Metadata') && !r.category.includes('Status') && !r.category.includes('Tags')) && (
+                    <div style={{
+                      marginTop: '1rem',
+                      padding: '0.75rem',
+                      background: '#1e4620',
+                      border: '1px solid #4caf50',
+                      borderRadius: '6px',
+                      fontSize: '0.9rem',
+                      color: '#9fdf9f'
+                    }}>
+                      <strong>⚠️ Important:</strong> This comparison includes functional changes that may affect resource behavior.
+                    </div>
+                  )}
+                </div>
+                
+                {/* Categories */}
                 {categories.map((category) => {
                   const categoryResources = groupedByCategory[category];
                   const color = getCategoryColor(category);
