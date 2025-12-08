@@ -327,23 +327,13 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
   
   // Initialize with all kinds expanded
   const [expandedKinds, setExpandedKinds] = useState<Set<string>>(new Set());
-  // Track expanded individual resources: key format is "kind:name:namespace"
-  const [expandedResources, setExpandedResources] = useState<Set<string>>(new Set());
   
-  // Expand all kinds and resources when result changes
+  // Expand all kinds when result changes
   useEffect(() => {
     if (kinds.length > 0) {
       setExpandedKinds(new Set(kinds));
-      // Expand all resources by default
-      const allResourceKeys = new Set<string>();
-      resources.forEach(resource => {
-        const key = `${resource.kind}:${resource.name}:${resource.namespace || 'default'}`;
-        allResourceKeys.add(key);
-      });
-      setExpandedResources(allResourceKeys);
     } else {
       setExpandedKinds(new Set());
-      setExpandedResources(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result.version1, result.version2]); // Expand when comparison changes
@@ -360,35 +350,12 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
     });
   };
   
-  const getResourceKey = (resource: ResourceDiff): string => {
-    return `${resource.kind}:${resource.name}:${resource.namespace || 'default'}`;
-  };
-  
-  const toggleResource = (resource: ResourceDiff) => {
-    const key = getResourceKey(resource);
-    setExpandedResources(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
-      return newSet;
-    });
-  };
-  
   const expandAll = () => {
     setExpandedKinds(new Set(kinds));
-    const allResourceKeys = new Set<string>();
-    resources.forEach(resource => {
-      allResourceKeys.add(getResourceKey(resource));
-    });
-    setExpandedResources(allResourceKeys);
   };
   
   const collapseAll = () => {
     setExpandedKinds(new Set());
-    setExpandedResources(new Set());
   };
   
   const allExpanded = expandedKinds.size === kinds.length && kinds.length > 0;
@@ -549,74 +516,39 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
                         </span>
                       </div>
                       
-                      {/* Resources of this kind - collapsible */}
+                      {/* Resources of this kind */}
                       {isExpanded && (
                         <div>
-                          {kindResources.map((resource, idx) => {
-                            const resourceKey = getResourceKey(resource);
-                            const isResourceExpanded = expandedResources.has(resourceKey);
-                            
-                            return (
-                              <div key={idx} style={{
-                                borderBottom: idx < kindResources.length - 1 ? '1px solid #333' : 'none'
+                          {kindResources.map((resource, idx) => (
+                            <div key={idx} style={{
+                              borderBottom: idx < kindResources.length - 1 ? '1px solid #333' : 'none'
+                            }}>
+                              {/* Resource header */}
+                              <div style={{
+                                padding: '0.5rem 1rem',
+                                background: '#2d2d2d',
+                                color: '#fff',
+                                fontSize: '0.85rem',
+                                borderBottom: '1px solid #444'
                               }}>
-                                {/* Resource header - collapsible */}
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation(); // Don't toggle the kind when clicking resource
-                                    toggleResource(resource);
-                                  }}
-                                  style={{
-                                    padding: '0.5rem 1rem',
-                                    background: '#2d2d2d',
-                                    color: '#fff',
-                                    fontSize: '0.85rem',
-                                    borderBottom: '1px solid #444',
-                                    cursor: 'pointer',
-                                    userSelect: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    transition: 'background 0.2s'
-                                  }}
-                                  onMouseOver={(e) => {
-                                    e.currentTarget.style.background = '#353535';
-                                  }}
-                                  onMouseOut={(e) => {
-                                    e.currentTarget.style.background = '#2d2d2d';
-                                  }}
-                                >
-                                  <span style={{ 
-                                    fontSize: '0.75rem',
-                                    transition: 'transform 0.2s',
-                                    transform: isResourceExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                                    display: 'inline-block'
-                                  }}>
-                                    ▶
+                                <strong>Name:</strong> {resource.name}
+                                {resource.namespace && (
+                                  <span style={{ marginLeft: '1rem', opacity: 0.8 }}>
+                                    <strong>Namespace:</strong> {resource.namespace}
                                   </span>
-                                  <span>
-                                    <strong>Name:</strong> {resource.name}
-                                    {resource.namespace && (
-                                      <span style={{ marginLeft: '1rem', opacity: 0.8 }}>
-                                        <strong>Namespace:</strong> {resource.namespace}
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                                {/* Resource diff content - collapsible */}
-                                {isResourceExpanded && (
-                                  <div style={{
-                                    background: '#1e1e1e',
-                                    overflowX: 'auto'
-                                  }}>
-                                    {resource.lines.map((line, lineIdx) => 
-                                      renderDiffLine(line, lineIdx)
-                                    )}
-                                  </div>
                                 )}
                               </div>
-                            );
-                          })}
+                              {/* Resource diff content */}
+                              <div style={{
+                                background: '#1e1e1e',
+                                overflowX: 'auto'
+                              }}>
+                                {resource.lines.map((line, lineIdx) => 
+                                  renderDiffLine(line, lineIdx)
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
