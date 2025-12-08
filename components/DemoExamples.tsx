@@ -10,50 +10,64 @@ interface DemoExample {
 
 const demoExamples: DemoExample[] = [
   {
-    name: 'Example 1: Compare Main to Previous Tag',
-    description: 'Compare the latest main branch to the previous release tag',
+    name: 'Example 1: Compare Two Release Tags',
+    description: 'Compare two ArgoCD release versions (argo-cd-9.1.5 vs argo-cd-9.1.6)',
     data: {
-      repository: 'https://github.com/bitnami/charts.git',
-      chartPath: 'bitnami/nginx',
-      version1: 'main',
-      version2: 'nginx-18.0.0',
+      repository: 'https://github.com/argoproj/argo-helm.git',
+      chartPath: 'charts/argo-cd',
+      version1: 'argo-cd-9.1.5',
+      version2: 'argo-cd-9.1.6',
     }
   },
   {
     name: 'Example 2: With Custom Values',
-    description: 'Use custom values content for comparison',
+    description: 'Compare versions with custom values content',
     data: {
-      repository: 'https://github.com/bitnami/charts.git',
-      chartPath: 'bitnami/nginx',
+      repository: 'https://github.com/argoproj/argo-helm.git',
+      chartPath: 'charts/argo-cd',
       version1: 'main',
       version2: 'main',
-      valuesContent: `replicaCount: 3
-image:
-  registry: docker.io
-  repository: bitnami/nginx
-  tag: "1.25.3"
-service:
-  type: ClusterIP
-  ports:
-    http: 80
-resources:
-  limits:
-    cpu: 200m
-    memory: 256Mi
-  requests:
-    cpu: 100m
-    memory: 128Mi`
+      valuesContent: `global:
+  image:
+    tag: "v2.9.0"
+controller:
+  replicas: 2
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 128Mi
+server:
+  replicas: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+repoServer:
+  replicas: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi`
     }
   },
   {
     name: 'Example 3: Compare with Values File',
-    description: 'Compare nginx chart configurations using a values file from the repository',
+    description: 'Compare ArgoCD chart configurations using a values file from the repository',
     data: {
-      repository: 'https://github.com/bitnami/charts.git',
-      chartPath: 'bitnami/nginx',
+      repository: 'https://github.com/argoproj/argo-helm.git',
+      chartPath: 'charts/argo-cd',
       version1: 'main',
       version2: 'main',
-      valuesFile: 'bitnami/nginx/values.yaml',
+      valuesFile: 'charts/argo-cd/values.yaml',
     }
   }
 ];
