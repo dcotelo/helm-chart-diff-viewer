@@ -1,8 +1,7 @@
 'use client';
 
+import { useState } from 'react';
 import { CompareResponse } from '@/lib/types';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 
 interface DiffDisplayProps {
   result: CompareResponse;
@@ -186,13 +185,86 @@ function groupResourcesByKind(resources: ResourceDiff[]): Record<string, Resourc
   return grouped;
 }
 
+// Render diff lines with green/red colors
+function renderDiffLine(line: string, index: number): JSX.Element {
+  const trimmed = line.trim();
+  const isAddition = line.startsWith('+') && !line.startsWith('+++');
+  const isRemoval = line.startsWith('-') && !line.startsWith('---');
+  const isContext = !isAddition && !isRemoval;
+  
+  let bgColor = '#1e1e1e';
+  let textColor = '#d4d4d4';
+  let borderColor = 'transparent';
+  
+  if (isAddition) {
+    bgColor = '#1e4620'; // Dark green background
+    textColor = '#9fdf9f'; // Light green text
+    borderColor = '#4caf50'; // Green border
+  } else if (isRemoval) {
+    bgColor = '#5c1a1a'; // Dark red background
+    textColor = '#ff9999'; // Light red text
+    borderColor = '#f44336'; // Red border
+  }
+  
+  return (
+    <div
+      key={index}
+      style={{
+        padding: '0.25rem 1rem',
+        background: bgColor,
+        color: textColor,
+        borderLeft: `3px solid ${borderColor}`,
+        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+        fontSize: '0.875rem',
+        lineHeight: '1.6',
+        whiteSpace: 'pre',
+        overflowX: 'auto'
+      }}
+    >
+      <span style={{ opacity: 0.6, marginRight: '0.5rem', userSelect: 'none' }}>
+        {isAddition ? '+' : isRemoval ? '-' : ' '}
+      </span>
+      <span>{line.substring(1)}</span>
+    </div>
+  );
+}
+
 export function DiffDisplay({ result }: DiffDisplayProps) {
   const hasDiff = result.diff && result.diff.trim().length > 0;
+  const [expandedKinds, setExpandedKinds] = useState<Set<string>>(new Set());
   
   // Parse and group by kind
   const resources = hasDiff ? parseDiffByResources(result.diff || '') : [];
   const groupedByKind = groupResourcesByKind(resources);
   const kinds = Object.keys(groupedByKind).sort();
+  
+  // Expand all by default
+  if (kinds.length > 0 && expandedKinds.size === 0) {
+    setExpandedKinds(new Set(kinds));
+  }
+  
+  const toggleKind = (kind: string) => {
+    setExpandedKinds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(kind)) {
+        newSet.delete(kind);
+      } else {
+        newSet.add(kind);
+      }
+      return newSet;
+    });
+  };
+  
+  const expandAll = () => {
+    setExpandedKinds(new Set(kinds));
+  };
+  
+  const collapseAll = () => {
+    setExpandedKinds(new Set());
+  };
+  
+  const allExpanded = expandedKinds.size === kinds.length && kinds.length > 0;
+  const allCollapsed = expandedKinds.size === 0 && kinds.length > 0;
 
   return (
     <div style={{
@@ -205,13 +277,58 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
         padding: '1rem',
         borderBottom: '1px solid #ddd'
       }}>
-        <h2 style={{
-          fontSize: '1.5rem',
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           marginBottom: '0.5rem',
-          color: '#333'
+          flexWrap: 'wrap',
+          gap: '0.5rem'
         }}>
-          Comparison Results
-        </h2>
+          <h2 style={{
+            fontSize: '1.5rem',
+            margin: 0,
+            color: '#333'
+          }}>
+            Comparison Results
+          </h2>
+          {kinds.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={expandAll}
+                disabled={allExpanded}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  background: allExpanded ? '#ccc' : '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: allExpanded ? 'not-allowed' : 'pointer',
+                  fontSize: '0.85rem',
+                  opacity: allExpanded ? 0.5 : 1
+                }}
+              >
+                Expand All
+              </button>
+              <button
+                onClick={collapseAll}
+                disabled={allCollapsed}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  background: allCollapsed ? '#ccc' : '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: allCollapsed ? 'not-allowed' : 'pointer',
+                  fontSize: '0.85rem',
+                  opacity: allCollapsed ? 0.5 : 1
+                }}
+              >
+                Collapse All
+              </button>
+            </div>
+          )}
+        </div>
         <div style={{
           display: 'flex',
           gap: '1rem',
@@ -254,24 +371,45 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
                 {kinds.map((kind) => {
                   const kindResources = groupedByKind[kind];
                   const color = getKindColor(kind);
+                  const isExpanded = expandedKinds.has(kind);
                   
                   return (
                     <div key={kind} style={{
                       borderBottom: '2px solid #444',
                       marginBottom: '1rem'
                     }}>
-                      {/* Kind header */}
-                      <div style={{
-                        padding: '0.75rem 1rem',
-                        background: color.bg,
-                        borderBottom: `2px solid ${color.border}`,
-                        color: color.text,
-                        fontSize: '0.95rem',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem'
-                      }}>
+                      {/* Kind header - collapsible */}
+                      <div 
+                        onClick={() => toggleKind(kind)}
+                        style={{
+                          padding: '0.75rem 1rem',
+                          background: color.bg,
+                          borderBottom: `2px solid ${color.border}`,
+                          color: color.text,
+                          fontSize: '0.95rem',
+                          fontWeight: '600',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.opacity = '0.9';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.opacity = '1';
+                        }}
+                      >
+                        <span style={{ 
+                          fontSize: '1rem',
+                          transition: 'transform 0.2s',
+                          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                          display: 'inline-block'
+                        }}>
+                          ▶
+                        </span>
                         <span style={{ fontSize: '1.1rem' }}>📦</span>
                         <span>{kind}</span>
                         <span style={{ 
@@ -283,40 +421,39 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
                         </span>
                       </div>
                       
-                      {/* Resources of this kind */}
-                      {kindResources.map((resource, idx) => (
-                        <div key={idx} style={{
-                          borderBottom: idx < kindResources.length - 1 ? '1px solid #333' : 'none'
-                        }}>
-                          <div style={{
-                            padding: '0.5rem 1rem',
-                            background: '#2d2d2d',
-                            color: '#fff',
-                            fontSize: '0.85rem',
-                            borderBottom: '1px solid #444'
-                          }}>
-                            <strong>Name:</strong> {resource.name}
-                            {resource.namespace && (
-                              <span style={{ marginLeft: '1rem', opacity: 0.8 }}>
-                                <strong>Namespace:</strong> {resource.namespace}
-                              </span>
-                            )}
-                          </div>
-                          <SyntaxHighlighter
-                            language="diff"
-                            style={oneDark}
-                            customStyle={{
-                              margin: 0,
-                              padding: '1rem',
-                              fontSize: '0.875rem',
-                              lineHeight: '1.6',
-                              background: '#1e1e1e'
-                            }}
-                          >
-                            {resource.diff}
-                          </SyntaxHighlighter>
+                      {/* Resources of this kind - collapsible */}
+                      {isExpanded && (
+                        <div>
+                          {kindResources.map((resource, idx) => (
+                            <div key={idx} style={{
+                              borderBottom: idx < kindResources.length - 1 ? '1px solid #333' : 'none'
+                            }}>
+                              <div style={{
+                                padding: '0.5rem 1rem',
+                                background: '#2d2d2d',
+                                color: '#fff',
+                                fontSize: '0.85rem',
+                                borderBottom: '1px solid #444'
+                              }}>
+                                <strong>Name:</strong> {resource.name}
+                                {resource.namespace && (
+                                  <span style={{ marginLeft: '1rem', opacity: 0.8 }}>
+                                    <strong>Namespace:</strong> {resource.namespace}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{
+                                background: '#1e1e1e',
+                                overflowX: 'auto'
+                              }}>
+                                {resource.lines.map((line, lineIdx) => 
+                                  renderDiffLine(line, lineIdx)
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   );
                 })}
@@ -333,18 +470,14 @@ export function DiffDisplay({ result }: DiffDisplayProps) {
                 }}>
                   ⚠️ Differences detected
                 </div>
-                <SyntaxHighlighter
-                  language="diff"
-                  style={oneDark}
-                  customStyle={{
-                    margin: 0,
-                    padding: '1rem',
-                    fontSize: '0.875rem',
-                    lineHeight: '1.6'
-                  }}
-                >
-                  {result.diff || ''}
-                </SyntaxHighlighter>
+                <div style={{
+                  background: '#1e1e1e',
+                  overflowX: 'auto'
+                }}>
+                  {(result.diff || '').split('\n').map((line, idx) => 
+                    renderDiffLine(line, idx)
+                  )}
+                </div>
               </div>
             )}
           </div>
