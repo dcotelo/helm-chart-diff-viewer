@@ -402,36 +402,6 @@ function renderDiffLine(line: string, index: number): JSX.Element {
   );
 }
 
-// Color palette for different change categories
-const categoryColors: Record<string, { bg: string; border: string; text: string }> = {
-  'Container & Image': { bg: '#e3f2fd', border: '#2196f3', text: '#1565c0' },
-  'Scaling': { bg: '#fff3e0', border: '#ff9800', text: '#e65100' },
-  'Resources': { bg: '#f3e5f5', border: '#9c27b0', text: '#6a1b9a' },
-  'Service Configuration': { bg: '#e8f5e9', border: '#4caf50', text: '#2e7d32' },
-  'Networking': { bg: '#e0f2f1', border: '#009688', text: '#00695c' },
-  'Environment & Config': { bg: '#fff9c4', border: '#fbc02d', text: '#f57f17' },
-  'Storage & Volumes': { bg: '#b2ebf2', border: '#00bcd4', text: '#00838f' },
-  'Selectors & Matching': { bg: '#f1f8e9', border: '#8bc34a', text: '#558b2f' },
-  'Workloads': { bg: '#e8eaf6', border: '#3f51b5', text: '#283593' },
-  'Services': { bg: '#f3e5f5', border: '#9c27b0', text: '#6a1b9a' },
-  'Ingress': { bg: '#e8f5e9', border: '#4caf50', text: '#2e7d32' },
-  'Configuration': { bg: '#fff3e0', border: '#ff9800', text: '#e65100' },
-  'Configuration Data': { bg: '#fff9c4', border: '#fbc02d', text: '#f57f17' },
-  'RBAC': { bg: '#ede7f6', border: '#673ab7', text: '#4527a0' },
-  'Storage': { bg: '#b2ebf2', border: '#00bcd4', text: '#00838f' },
-  'Spec Changes': { bg: '#e1bee7', border: '#9c27b0', text: '#6a1b9a' },
-  'Metadata & Tags': { bg: '#f5f5f5', border: '#9e9e9e', text: '#424242' },
-  'Status': { bg: '#eceff1', border: '#607d8b', text: '#37474f' },
-  'Other': { bg: '#fafafa', border: '#bdbdbd', text: '#616161' }
-};
-
-function getCategoryColor(category: string): { bg: string; border: string; text: string } {
-  return categoryColors[category] || { 
-    bg: '#f5f5f5', 
-    border: '#9e9e9e', 
-    text: '#424242' 
-  };
-}
 
 export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) {
   const hasDiff = result.diff && result.diff.trim().length > 0;
@@ -717,7 +687,6 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                     }}>
                       {categories.map((category) => {
                         const count = groupedByCategory[category].length;
-                        const color = getCategoryColor(category);
                         const isImportant = !category.includes('Metadata') && !category.includes('Status') && !category.includes('Tags');
                         
                         return (
@@ -725,11 +694,11 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                             key={category}
                             style={{
                               padding: '0.5rem 0.75rem',
-                              background: isImportant ? color.bg : '#1e1e1e',
-                              border: `1px solid ${color.border}`,
+                              background: '#1e1e1e',
+                              border: '1px solid #444',
                               borderRadius: '4px',
                               fontSize: '0.85rem',
-                              color: isImportant ? color.text : '#ccc',
+                              color: '#ccc',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '0.5rem'
@@ -737,7 +706,7 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                           >
                             <span style={{ fontWeight: '600' }}>{category}:</span>
                             <span style={{ 
-                              background: isImportant ? color.border : '#444',
+                              background: '#444',
                               color: '#fff',
                               padding: '0.1rem 0.4rem',
                               borderRadius: '3px',
@@ -771,7 +740,6 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                 {/* Categories */}
                 {categories.map((category) => {
                   const categoryResources = groupedByCategory[category];
-                  const color = getCategoryColor(category);
                   const isExpanded = expandedCategories.has(category);
                   
                   return (
@@ -784,9 +752,9 @@ export function DiffDisplay({ result, ignoreLabels = false }: DiffDisplayProps) 
                         onClick={() => toggleCategory(category)}
                         style={{
                           padding: '0.75rem 1rem',
-                          background: color.bg,
-                          borderBottom: `2px solid ${color.border}`,
-                          color: color.text,
+                          background: '#2d2d2d',
+                          borderBottom: '2px solid #444',
+                          color: '#fff',
                           fontSize: '0.95rem',
                           fontWeight: '600',
                           display: 'flex',
