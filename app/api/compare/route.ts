@@ -13,7 +13,11 @@ export async function POST(request: NextRequest) {
     if (!body.repository || !body.chartPath || !body.version1 || !body.version2) {
       return NextResponse.json<CompareResponse>({
         success: false,
-        error: 'Missing required fields: repository, chartPath, version1, version2'
+        error: 'Missing required fields: repository, chartPath, version1, version2\n\n' +
+               'For monorepo structures, use chart paths like:\n' +
+               '  - charts/<chart-name> (e.g., charts/datadog)\n' +
+               '  - chart/<chart-name>\n' +
+               '  - <chart-name> (if chart is at repository root)'
       }, { status: 400 });
     }
 
@@ -21,7 +25,20 @@ export async function POST(request: NextRequest) {
     if (!body.repository.match(/^(https?:\/\/|git@)/)) {
       return NextResponse.json<CompareResponse>({
         success: false,
-        error: 'Invalid repository URL format'
+        error: 'Invalid repository URL format. Please use:\n' +
+               '  - HTTPS: https://github.com/user/repo.git\n' +
+               '  - SSH: git@github.com:user/repo.git'
+      }, { status: 400 });
+    }
+
+    // Validate chart path format
+    if (body.chartPath.trim() === '') {
+      return NextResponse.json<CompareResponse>({
+        success: false,
+        error: 'Chart path cannot be empty. For monorepo structures, specify the path like:\n' +
+               '  - charts/datadog\n' +
+               '  - charts/datadog-operator\n' +
+               '  - chart/my-chart'
       }, { status: 400 });
     }
 

@@ -14,11 +14,16 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Install Helm
+# Install Helm and dyff
 RUN apk add --no-cache curl tar && \
     curl -fsSL https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz | tar -xz && \
     mv linux-amd64/helm /usr/local/bin/helm && \
-    rm -rf linux-amd64
+    rm -rf linux-amd64 && \
+    # Install dyff (get latest version dynamically)
+    DYFF_VERSION=$(curl -s https://api.github.com/repos/homeport/dyff/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/v//') && \
+    curl -fsSL "https://github.com/homeport/dyff/releases/latest/download/dyff_${DYFF_VERSION}_linux_amd64.tar.gz" | tar -xz && \
+    mv dyff /usr/local/bin/dyff && \
+    chmod +x /usr/local/bin/dyff
 
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
@@ -33,11 +38,16 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Install Helm and Git
+# Install Helm, Git, and dyff
 RUN apk add --no-cache curl git tar && \
     curl -fsSL https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz | tar -xz && \
     mv linux-amd64/helm /usr/local/bin/helm && \
     rm -rf linux-amd64 && \
+    # Install dyff (get latest version dynamically)
+    DYFF_VERSION=$(curl -s https://api.github.com/repos/homeport/dyff/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/v//') && \
+    curl -fsSL "https://github.com/homeport/dyff/releases/latest/download/dyff_${DYFF_VERSION}_linux_amd64.tar.gz" | tar -xz && \
+    mv dyff /usr/local/bin/dyff && \
+    chmod +x /usr/local/bin/dyff && \
     # Configure Git to not prompt for credentials
     git config --global credential.helper "" && \
     git config --global init.defaultBranch main

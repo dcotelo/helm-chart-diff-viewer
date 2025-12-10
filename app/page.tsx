@@ -203,7 +203,10 @@ export default function Home() {
 
         {result && (
           <div style={{ marginTop: '2rem' }}>
-            <DiffDisplay result={result} ignoreLabels={formData?.ignoreLabels} />
+            <DiffDisplay 
+              result={result} 
+              ignoreLabels={formData?.ignoreLabels}
+            />
           </div>
         )}
       </div>

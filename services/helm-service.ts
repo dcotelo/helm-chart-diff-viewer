@@ -13,6 +13,7 @@ export interface HelmCompareOptions {
   version2: string;
   valuesFile?: string;
   valuesContent?: string;
+  normalizeManifests?: boolean;
 }
 
 export class HelmService {
@@ -53,12 +54,8 @@ export class HelmService {
         valuesFilePath = path.join(repoPath, valuesFile);
       }
       
-      // Render Helm templates
-      const rendered1 = await this.renderHelmTemplate(version1Path, valuesFilePath);
-      const rendered2 = await this.renderHelmTemplate(version2Path, valuesFilePath);
-      
-      // Compare using dyff or fallback to diff
-      const diff = await this.compareYaml(rendered1, rendered2);
+      // Use dyff to compare rendered chart versions
+      const diff = await this.compareWithDyff(version1Path, version2Path, valuesFilePath);
       
       // Cleanup
       await this.cleanup(workPath);
@@ -154,15 +151,88 @@ export class HelmService {
       }
       
       // Copy chart directory
-      const sourceChartPath = path.join(repoPath, chartPath);
+      // Normalize chart path - remove leading/trailing slashes and handle relative paths
+      const normalizedChartPath = chartPath.replace(/^\/+|\/+$/g, '');
+      const sourceChartPath = path.join(repoPath, normalizedChartPath);
       await fs.mkdir(targetPath, { recursive: true });
       
-      // Check if chart path exists
+      // Check if chart path exists and is a directory
       try {
-        await fs.access(sourceChartPath);
+        const stats = await fs.stat(sourceChartPath);
+        if (!stats.isDirectory()) {
+          throw new Error(`Chart path exists but is not a directory: ${chartPath}`);
+        }
+        
+        // Verify it's a valid Helm chart by checking for Chart.yaml
+        const chartYamlPath = path.join(sourceChartPath, 'Chart.yaml');
+        try {
+          await fs.access(chartYamlPath);
+        } catch {
+          // Try templates/ directory as alternative indicator (some charts might not have Chart.yaml at root)
+          const templatesPath = path.join(sourceChartPath, 'templates');
+          try {
+            const templatesStats = await fs.stat(templatesPath);
+            if (!templatesStats.isDirectory()) {
+              throw new Error(`Chart path does not appear to be a valid Helm chart: ${chartPath} (missing Chart.yaml or templates/)`);
+            }
+          } catch {
+            throw new Error(`Chart path does not appear to be a valid Helm chart: ${chartPath} (missing Chart.yaml or templates/)`);
+          }
+        }
+        
         await this.copyDirectory(sourceChartPath, targetPath);
-      } catch {
-        throw new Error(`Chart path not found: ${chartPath} at version ${version}`);
+      } catch (error: any) {
+        // Provide helpful error message with suggestions
+        let errorMessage = `Chart path not found: "${chartPath}" at version "${version}".\n`;
+        
+        // Try to list available chart directories in common locations
+        try {
+          const commonChartDirs = ['charts', 'chart', 'helm-charts', 'helm'];
+          let availableCharts: string[] = [];
+          
+          for (const dir of commonChartDirs) {
+            const dirPath = path.join(repoPath, dir);
+            try {
+              const entries = await fs.readdir(dirPath, { withFileTypes: true });
+              const subdirs = entries
+                .filter(e => e.isDirectory())
+                .map(e => path.join(dir, e.name))
+                .slice(0, 10);
+              availableCharts.push(...subdirs);
+            } catch {
+              // Directory doesn't exist, skip
+            }
+          }
+          
+          // Also check root level for chart directories
+          try {
+            const rootEntries = await fs.readdir(repoPath, { withFileTypes: true });
+            const rootDirs = rootEntries
+              .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+              .map(e => e.name)
+              .slice(0, 10);
+            availableCharts.push(...rootDirs);
+          } catch {
+            // Ignore
+          }
+          
+          if (availableCharts.length > 0) {
+            errorMessage += `\nAvailable chart directories (sample): ${availableCharts.slice(0, 10).join(', ')}`;
+            errorMessage += `\n\nCommon monorepo patterns:`;
+            errorMessage += `\n  - charts/<chart-name> (e.g., charts/datadog)`;
+            errorMessage += `\n  - chart/<chart-name>`;
+            errorMessage += `\n  - <chart-name> (if chart is at repository root)`;
+          }
+        } catch {
+          // Ignore errors when trying to list directories
+        }
+        
+        // If the original error has a message, include it
+        if (error.message && !error.message.includes('Chart path not found')) {
+          errorMessage += `\n\nDetails: ${error.message}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // Build dependencies after copying the chart
@@ -286,6 +356,40 @@ export class HelmService {
         // Directory might already exist, ignore
       }
 
+      // First, try to update dependencies (downloads missing dependencies)
+      // This is necessary when dependencies are declared but not present
+      try {
+        const { stdout: updateStdout, stderr: updateStderr } = await execAsync(
+          `helm dependency update ${chartPath}`,
+          {
+            timeout: 120000,
+            maxBuffer: 5 * 1024 * 1024, // 5MB buffer
+            env
+          }
+        );
+        
+        if (updateStdout) {
+          console.log('Helm dependency update output:', updateStdout);
+        }
+        
+        // Log warnings but don't fail on them
+        if (updateStderr) {
+          const errorLines = updateStderr.split('\n').filter((line: string) => 
+            line.trim() && 
+            !line.toLowerCase().includes('warning') &&
+            !line.toLowerCase().includes('info')
+          );
+          
+          if (errorLines.length > 0) {
+            console.warn('Helm dependency update had errors:', errorLines.join('; '));
+          }
+        }
+      } catch (updateError: any) {
+        // If update fails, try build anyway - it might work if dependencies are already present
+        console.warn('Helm dependency update failed, trying build:', updateError.message);
+      }
+
+      // Then build dependencies (rebuilds Chart.lock and ensures consistency)
       const { stdout, stderr } = await execAsync(
         `helm dependency build ${chartPath}`,
         {
@@ -333,6 +437,20 @@ export class HelmService {
         errorMessage = error.stderr.trim();
       } else if (error.message) {
         errorMessage = error.message;
+      }
+      
+      // Check for missing dependencies error
+      if (errorMessage.includes('missing in charts/') || errorMessage.includes('found in Chart.yaml, but missing')) {
+        throw new Error(
+          `Chart dependencies are declared in Chart.yaml but missing from charts/ directory. ` +
+          `This usually means dependencies need to be fetched from remote repositories. ` +
+          `Error: ${errorMessage}\n\n` +
+          `The application attempted to run 'helm dependency update' and 'helm dependency build', ` +
+          `but dependencies could not be resolved. Please ensure:\n` +
+          `  1. All repository URLs in Chart.yaml are valid and accessible\n` +
+          `  2. Helm can access the required chart repositories\n` +
+          `  3. Network connectivity is available to fetch dependencies`
+        );
       }
       
       // Check if it's a repository-related error
@@ -462,7 +580,105 @@ export class HelmService {
     }
   }
 
-  private async compareYaml(yaml1: string, yaml2: string): Promise<string> {
+  private async compareWithDyff(
+    chartPath1: string,
+    chartPath2: string,
+    valuesFile?: string
+  ): Promise<string> {
+    const env = {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: '',
+      GIT_CREDENTIAL_HELPER: ''
+    };
+
+    // Check if dyff is installed
+    try {
+      await execAsync('dyff version', { timeout: 5000, env });
+    } catch {
+      throw new Error(
+        'dyff is not installed. Please install it with one of the following:\n' +
+        '  - Homebrew: brew install homeport/tap/dyff\n' +
+        '  - Download from: https://github.com/homeport/dyff/releases\n' +
+        '  - Or use: curl --silent --location https://git.io/JYfAY | bash'
+      );
+    }
+
+    // Build values file flag
+    const valuesFlag = valuesFile ? `-f ${valuesFile}` : '';
+    const releaseName = 'diff-comparison';
+
+    // Render both chart versions to YAML
+    const { stdout: rendered1 } = await execAsync(
+      `helm template ${releaseName} ${chartPath1} ${valuesFlag}`,
+      {
+        timeout: 60000,
+        maxBuffer: 10 * 1024 * 1024,
+        env
+      }
+    );
+
+    const { stdout: rendered2 } = await execAsync(
+      `helm template ${releaseName} ${chartPath2} ${valuesFlag}`,
+      {
+        timeout: 60000,
+        maxBuffer: 10 * 1024 * 1024,
+        env
+      }
+    );
+
+    // Write rendered YAML to temporary files
+    const tmp1 = path.join(this.workDir, `dyff-v1-${Date.now()}.yaml`);
+    const tmp2 = path.join(this.workDir, `dyff-v2-${Date.now()}.yaml`);
+    
+    await fs.writeFile(tmp1, rendered1, 'utf-8');
+    await fs.writeFile(tmp2, rendered2, 'utf-8');
+
+    try {
+      // Use dyff between to compare the two YAML files
+      // --omit-header removes the header for cleaner output
+      const { stdout, stderr } = await execAsync(
+        `dyff between "${tmp1}" "${tmp2}" --omit-header`,
+        {
+          timeout: 30000,
+          maxBuffer: 10 * 1024 * 1024,
+          env
+        }
+      );
+
+      // Cleanup temp files
+      await fs.unlink(tmp1).catch(() => {});
+      await fs.unlink(tmp2).catch(() => {});
+
+      // Return raw dyff output
+      return (stdout || stderr || '').trim();
+    } catch (error: any) {
+      // Cleanup temp files
+      await fs.unlink(tmp1).catch(() => {});
+      await fs.unlink(tmp2).catch(() => {});
+
+      // dyff exits with code 1 when differences are found (expected behavior)
+      // Exit code 0 = no differences, 1 = differences found
+      if (error.code === 1 || error.code === '1') {
+        // Differences found - return the diff output
+        return (error.stdout || error.stderr || '').trim();
+      }
+      
+      // Return output if available (might be diff even on error)
+      if (error.stdout && error.stdout.trim().length > 0) {
+        return error.stdout.trim();
+      }
+      
+      if (error.stderr && error.stderr.trim().length > 0) {
+        return error.stderr.trim();
+      }
+
+      // Real error - throw it
+      throw new Error(`dyff failed: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  private async compareYamlFallback(yaml1: string, yaml2: string): Promise<string> {
     // Try to use dyff if available, otherwise fallback to diff
     try {
       // Write to temp files for dyff
@@ -496,6 +712,34 @@ export class HelmService {
       // Fallback to simple diff or custom comparison
       return this.simpleYamlDiff(yaml1, yaml2);
     }
+  }
+
+  private async normalizeYaml(yaml: string): Promise<string> {
+    // Basic normalization: remove trailing whitespace, normalize line endings, etc.
+    // For more advanced normalization, we would need a YAML parser
+    // This is a simple implementation that handles common cases
+    
+    const lines = yaml.split('\n');
+    const normalized: string[] = [];
+    
+    for (const line of lines) {
+      // Remove trailing whitespace
+      let normalizedLine = line.replace(/\s+$/, '');
+      
+      // Normalize empty lines
+      if (normalizedLine.trim() === '') {
+        normalizedLine = '';
+      }
+      
+      normalized.push(normalizedLine);
+    }
+    
+    // Remove trailing empty lines
+    while (normalized.length > 0 && normalized[normalized.length - 1] === '') {
+      normalized.pop();
+    }
+    
+    return normalized.join('\n');
   }
 
   private simpleYamlDiff(yaml1: string, yaml2: string): string {

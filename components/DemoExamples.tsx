@@ -20,6 +20,26 @@ const demoExamples: DemoExample[] = [
     }
   },
   {
+    name: 'Example: DataDog Helm Charts (Monorepo)',
+    description: 'Compare DataDog chart versions in monorepo structure (datadog-3.0.0 vs datadog-3.1.0)',
+    data: {
+      repository: 'https://github.com/DataDog/helm-charts.git',
+      chartPath: 'charts/datadog',
+      version1: 'datadog-3.0.0',
+      version2: 'datadog-3.1.0',
+    }
+  },
+  {
+    name: 'Example: DataDog Helm Charts (Monorepo)',
+    description: 'Compare DataDog chart versions in monorepo structure (datadog-3.0.0 vs datadog-3.1.0)',
+    data: {
+      repository: 'https://github.com/DataDog/helm-charts.git',
+      chartPath: 'charts/datadog',
+      version1: 'datadog-3.0.0',
+      version2: 'datadog-3.1.0',
+    }
+  },
+  {
     name: 'Example 2: With Custom Values',
     description: 'Compare versions with custom values content',
     data: {
